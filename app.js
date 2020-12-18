@@ -5,8 +5,8 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
-const encrypt = require("mongoose-encryption");
-var md5 = require("md5"); //required for hashing passwords
+const bcrypt = require("bcrypt"); // required for hashing passwords
+const saltRounds = 10; // Number of salt rounds
 
 const app = express();
 
@@ -16,7 +16,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 mongoose.connect("mongodb://localhost:27017/userDB", { useNewUrlParser: true, useUnifiedTopology: true });
 
-//an advanced way of writing a mongoose schema (required inorder to use mongoose-encryption)
+
 const userSchema = new mongoose.Schema({
     email: String,
     password: String
@@ -41,36 +41,53 @@ app.get("/register", function(req, res) {
 });
 
 app.post("/register", function(req, res) {
-    const newUser = new User({
-        email: req.body.username,
-        password: md5(req.body.password) //turn password into ireversible harsh with md5()
 
+    // bcrypt.hash(myPlaintextPassword, saltRounds, function(err, hash) {
+    //     // Store hash in your password DB.
+    // });
+
+    bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+        //create the user only after generating the hash
+
+        const newUser = new User({
+            email: req.body.username,
+            password: hash //add has password to doc
+
+        });
+        newUser.save(function(err) {
+            if (!err) {
+                res.render("secrets");
+            } else {
+                console.log(err);
+            }
+        });
     });
-    newUser.save(function(err) {
-        if (!err) {
-            res.render("secrets");
-        } else {
-            console.log(err);
-        }
-    });
+
+
 });
 
 app.post("/login", function(req, res) {
     const username = req.body.username;
-    const password = md5(req.body.password);
+    const password = req.body.password;
 
     User.findOne({ email: username },
 
         function(err, foundUser) {
             if (err) {
-                return handleError(err);
+                console.log(err);
             } else {
                 if (foundUser) { //user is found
-                    if (foundUser.password === password) { // user's password === to database password
 
-                        res.render("secrets"); //render the secrets page
+                    //compare bcrypt password with database password and login
+                    bcrypt.compare(password, foundUser.password, function(err, result) {
 
-                    }
+                        if (result === true) { //if result of compare is true 
+
+                            res.render("secrets"); //render the secrets page
+
+                        }
+                    });
+
 
                 }
             }
